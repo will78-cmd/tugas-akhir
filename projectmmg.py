@@ -18,7 +18,7 @@ if not firebase_admin._apps:
         "universe_domain": st.secrets["firebase"]["universe_domain"]
     })
     firebase_admin.initialize_app(cred, {
-        'databaseURL': 'https://projectmmg-faeb5-default-rtdb.asia-southeast1.firebasedatabase.app/'
+        'databaseURL': 'https://tugas-akhir-22e87-default-rtdb.asia-southeast1.firebasedatabase.app/'
     })
 
 ref_status = db.reference("/pompa/manual")

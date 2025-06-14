@@ -1,7 +1,6 @@
 import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, db
-from datetime import datetime
 import time
 
 # FIREBASE SETUP
@@ -46,12 +45,8 @@ with col2:
               key="otomatis", on_change=handle_otomatis_toggle)
 
 st.markdown("---")
-st.subheader("Setel Alarm Otomatis (Format 24 Jam)")
-alarm_hour = st.number_input("Jam (0 - 23)", min_value=0, max_value=23, value=10)
-alarm_minute = st.number_input("Menit (0 - 59)", min_value=0, max_value=59, value=0)
-start_alarm = st.button("Mulai Alarm Otomatis")
 
-# ==== PUSH NOTIFIKASI BROWSER ====
+# ==== NOTIFIKASI BROWSER ====
 st.subheader("Aktifkan Push Notifikasi Browser (Chrome/Edge/Firefox)")
 st.info("Klik tombol di bawah dan pilih Izinkan pada pop-up browser agar notifikasi bisa dikirim ke komputer/HP kamu.")
 
@@ -76,30 +71,26 @@ async function aktifkanNotif() {
 </script>
 """, height=100)
 
-# ==== NOTIFIKASI ALARM (BROWSER LOCAL) ====
-def trigger_local_notification(jam, menit):
+# ==== TOMBOL KIRIM NOTIFIKASI ALARM BUZZER ====
+def trigger_local_notification():
     st.components.v1.html(f"""
     <script>
     if (Notification.permission === "granted") {{
         new Notification("Alarm Pompa Aktif!", {{
-            body: "Pompa menyala otomatis pada {jam:02d}:{menit:02d}",
+            body: "Buzzer menyala otomatis karena tombol diklik.",
             icon: ""
         }});
     }}
     </script>
     """, height=0)
 
-if start_alarm:
-    st.success(f"Alarm akan menyala pada pukul {alarm_hour:02d}:{alarm_minute:02d}")
-    with st.spinner("Menunggu waktu alarm..."):
-        while True:
-            now = datetime.now()
-            if now.hour == alarm_hour and now.minute == alarm_minute:
-                st.success("Waktu alarm tercapai! Menyalakan buzzer...")
-                ref_status.set("on")
-                trigger_local_notification(alarm_hour, alarm_minute)  # ===> Panggil notif browser
-                time.sleep(60)
-                ref_status.set("off")
-                st.success("Buzzer dimatikan setelah 1 menit.")
-                break
-            time.sleep(1)
+st.markdown("---")
+st.subheader("Kirim Alarm Buzzer + Notifikasi")
+
+if st.button("Kirim Notifikasi Alarm & Nyalakan Buzzer"):
+    st.success("Buzzer dinyalakan & notifikasi dikirim!")
+    ref_status.set("on")
+    trigger_local_notification()
+    time.sleep(60)  # Tunggu 1 menit (blocking, tapi hanya pada klik ini)
+    ref_status.set("off")
+    st.success("Buzzer dimatikan setelah 1 menit.")

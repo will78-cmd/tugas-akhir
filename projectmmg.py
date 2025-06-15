@@ -14,8 +14,7 @@ if not firebase_admin._apps:
         "auth_uri": st.secrets["firebase"]["auth_uri"],
         "token_uri": st.secrets["firebase"]["token_uri"],
         "auth_provider_x509_cert_url": st.secrets["firebase"]["auth_provider_x509_cert_url"],
-        "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"],
-        "universe_domain": st.secrets["firebase"]["universe_domain"]
+        "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
     })
     firebase_admin.initialize_app(cred, {
         'https://tugas-akhir-8ec00-default-rtdb.asia-southeast1.firebasedatabase.app/'

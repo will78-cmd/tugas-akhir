@@ -15,6 +15,7 @@ conn = mysql.connector.connect(
     host=mysql_conf["host"],
     port=mysql_conf["port"],
     database=mysql_conf["database"],
+    user=mysql_conf["user"],
     password=mysql_conf["password"]
 )
 cursor = conn.cursor()

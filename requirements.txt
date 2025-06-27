@@ -1,2 +1,7 @@
 streamlit
-streamlit-js-eval
+streamlit-autorefresh
+firebase-admin
+pandas
+mysql-connector-python
+sqlalchemy
+plotly

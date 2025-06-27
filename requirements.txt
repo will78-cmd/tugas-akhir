@@ -4,4 +4,3 @@ firebase-admin
 pandas
 mysql-connector-python
 sqlalchemy
-plotly

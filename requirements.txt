@@ -2,6 +2,7 @@ streamlit
 streamlit-autorefresh
 firebase-admin
 pandas
+pymysql
 mysql-connector-python
 sqlalchemy
 plotly

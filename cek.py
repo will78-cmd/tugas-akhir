@@ -1,29 +1,40 @@
 import streamlit as st
-import firebase_admin
-from firebase_admin import credentials
-import mysql.connector
+from streamlit_js_eval import streamlit_js_eval
 
-firebase_config = dict(st.secrets["firebase"])
-cred = credentials.Certificate(firebase_config)
+st.set_page_config(page_title="Tes Push Notifikasi Browser", page_icon="🔔")
 
-if not firebase_admin._apps:
-    firebase_admin.initialize_app(cred)
+st.title("Demo Push Notifikasi Browser di Streamlit")
+st.write("""
+Aplikasi ini akan meminta izin notifikasi dari browser.  
+Setelah diizinkan, klik tombol 'Tes Push Notifikasi' untuk mengirimkan notifikasi ke browser Anda.
+""")
 
-mysql_conf = st.secrets["mysql"]
+notif_status = st.session_state.get("notif_status", "Belum diminta")
 
-conn = mysql.connector.connect(
-    host=mysql_conf["host"],
-    port=mysql_conf["port"],
-    database=mysql_conf["database"],
-    user=mysql_conf["user"],
-    password=mysql_conf["password"]
-)
-cursor = conn.cursor()
-cursor.execute("SELECT DATABASE();")
-db_name = cursor.fetchone()[0]
+if st.button("Izinkan Notifikasi Browser"):
+    res = streamlit_js_eval(js_expressions="Notification.requestPermission()", key="notif_perm")
+    if res and res["Notification.requestPermission()"]:
+        status = res["Notification.requestPermission()"]
+        st.session_state["notif_status"] = status
+        if status == "granted":
+            st.success("Izin notifikasi DIBERI. Sekarang kamu bisa menerima notifikasi push!")
+        elif status == "denied":
+            st.error("Izin notifikasi DITOLAK. Aktifkan lewat pengaturan browser untuk mencoba lagi.")
+        else:
+            st.info(f"Status izin: {status}")
 
-st.success(f"Terkoneksi ke MySQL: {db_name}")
-cursor.close()
-conn.close()
+status_now = st.session_state.get("notif_status", "Belum diminta")
+st.info(f"Status izin notifikasi sekarang: **{status_now}**")
 
-st.success("Firebase & MySQL sukses dikoneksikan menggunakan secrets.toml!")
+if st.button("Tes Push Notifikasi"):
+    notif_js = """
+    if (Notification.permission === "granted") {
+        new Notification("Notifikasi dari Streamlit!", { 
+            body: "Ini adalah notifikasi browser dari Streamlit.",
+            icon: "https://streamlit.io/images/brand/streamlit-logo-primary-colormark-darktext.png"
+        });
+    } else {
+        alert("Izin notifikasi belum diberikan. Klik 'Izinkan Notifikasi Browser' dulu!");
+    }
+    """
+    streamlit_js_eval(js_expressions=notif_js, key="push_notif")

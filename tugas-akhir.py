@@ -15,7 +15,9 @@ firebase_config = dict(st.secrets["firebase"])
 cred = credentials.Certificate(firebase_config)
 
 if not firebase_admin._apps:
-    firebase_admin.initialize_app(cred)
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': st.secrets.firebase.database_url
+    })
 
 ref_status = db.reference("/pompa/manual")
 ref_otomatis = db.reference("/pompa/otomatis")

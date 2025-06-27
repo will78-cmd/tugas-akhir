@@ -138,7 +138,7 @@ if ('Notification' in window && Notification.permission !== "granted") {
 
 st.markdown("<h4 style='text-align: center;'>Data Sensor Terbaru</h4>", unsafe_allow_html=True)
 
-st_autorefresh(interval=2000, key="widgetrefresh")
+st_autorefresh(interval=5000, key="widgetrefresh")
 
 data = get_latest_sensor_data()
 

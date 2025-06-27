@@ -16,7 +16,7 @@ cred = credentials.Certificate(firebase_config)
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred, {
-        'databaseURL': st.secrets.firebase.database_url
+        'databaseURL': 'https://tugas-akhir-8ec00-default-rtdb.asia-southeast1.firebasedatabase.app/'
     })
 
 ref_status = db.reference("/pompa/manual")

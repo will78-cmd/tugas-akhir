@@ -7,3 +7,6 @@ mysql-connector-python
 sqlalchemy
 plotly
 XlsxWriter
+requests
+google-auth
+streamlit-js-eval

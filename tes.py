@@ -7,9 +7,9 @@ import google.auth.transport.requests
 from streamlit_js_eval import streamlit_js_eval
 
 st.set_page_config(page_title="Web Push Notifikasi FCM", layout="centered")
-st.title("Web Push Notification FCM (Semua Secret di [firebase])")
+st.title("Web Push Notification FCM (Format Full TOML)")
 
-# 1. Ambil semua variabel dari [firebase] section
+# 1. Ambil SEMUA variabel dari [firebase] secrets
 firebase = st.secrets["firebase"]
 
 FIREBASE_CONFIG = {
@@ -22,8 +22,20 @@ FIREBASE_CONFIG = {
 VAPID_KEY = firebase["FIREBASE_VAPID_KEY"]
 PROJECT_ID = firebase["FIREBASE_PROJECT_ID"]
 
-# 2. Ambil credentials dari JSON service account di secrets
-service_account_info = json.loads(firebase["FIREBASE_SERVICE_ACCOUNT_JSON"])
+# 2. Bangun dict service account info dari secrets TOML
+service_account_info = {
+    "type": firebase["FIREBASE_TYPE"],
+    "project_id": firebase["FIREBASE_PROJECT_ID"],
+    "private_key_id": firebase["FIREBASE_PRIVATE_KEY_ID"],
+    "private_key": firebase["FIREBASE_PRIVATE_KEY"],
+    "client_email": firebase["FIREBASE_CLIENT_EMAIL"],
+    "client_id": firebase["FIREBASE_CLIENT_ID"],
+    "auth_uri": firebase["FIREBASE_AUTH_URI"],
+    "token_uri": firebase["FIREBASE_TOKEN_URI"],
+    "auth_provider_x509_cert_url": firebase["FIREBASE_AUTH_PROVIDER_X509_CERT_URL"],
+    "client_x509_cert_url": firebase["FIREBASE_CLIENT_X509_CERT_URL"]
+}
+
 def send_fcm_v1(token, title, body):
     credentials = service_account.Credentials.from_service_account_info(
         service_account_info,
@@ -50,6 +62,7 @@ def send_fcm_v1(token, title, body):
     resp = requests.post(url, headers=headers, data=json.dumps(data))
     return resp
 
+# 3. Simpan token device hanya di server, jangan pernah di repo
 TOKENS_FILE = "tokens.json"
 
 def save_token(name, token):
@@ -67,7 +80,7 @@ def load_tokens():
             return json.load(f)
     return {}
 
-# 3. Komponen HTML/JS frontend untuk register token device
+# 4. Komponen HTML/JS frontend untuk register token device (hanya pakai public info dari secrets)
 html_code = f"""
 <link rel="manifest" href="/manifest.json">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -106,7 +119,7 @@ messaging.onMessage(function(payload) {{
 """
 st.components.v1.html(html_code, height=170)
 
-# 4. Ambil token dari localStorage via streamlit-js-eval
+# 5. Ambil token dari localStorage via streamlit-js-eval
 token = streamlit_js_eval(js_expressions="localStorage.getItem('fcm_token')", key="fcm_token")
 
 if token and token != "null" and len(token) > 10:
@@ -148,9 +161,9 @@ else:
 st.markdown("""
 ---
 **Tips:**
-- Semua variabel rahasia langsung masuk ke secrets [firebase].
-- File service-account.json **tidak perlu di-upload ke repo!**
-- File `firebase-messaging-sw.js`, `manifest.json`, `icon.png` harus ada di root/public.
+- Semua variabel rahasia harus di secrets [firebase] (format field TOML, bukan JSON).
+- Tidak ada file rahasia di repo! Kode hanya baca rahasia dari st.secrets.
+- File `firebase-messaging-sw.js`, `manifest.json`, `icon.png` wajib di root/public repo.
 - Website **HARUS diakses via HTTPS**.
 - Jangan upload `tokens.json` ke repo, hanya untuk penyimpanan sementara di server.
 """)

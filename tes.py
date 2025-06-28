@@ -24,16 +24,16 @@ PROJECT_ID = firebase["FIREBASE_PROJECT_ID"]
 
 # 2. Bangun dict service account info dari secrets TOML
 service_account_info = {
-    "type": firebase["FIREBASE_TYPE"],
-    "project_id": firebase["FIREBASE_PROJECT_ID"],
-    "private_key_id": firebase["FIREBASE_PRIVATE_KEY_ID"],
-    "private_key": firebase["FIREBASE_PRIVATE_KEY"],
-    "client_email": firebase["FIREBASE_CLIENT_EMAIL"],
-    "client_id": firebase["FIREBASE_CLIENT_ID"],
-    "auth_uri": firebase["FIREBASE_AUTH_URI"],
-    "token_uri": firebase["FIREBASE_TOKEN_URI"],
-    "auth_provider_x509_cert_url": firebase["FIREBASE_AUTH_PROVIDER_X509_CERT_URL"],
-    "client_x509_cert_url": firebase["FIREBASE_CLIENT_X509_CERT_URL"]
+    "type": firebase["type"],
+    "project_id": firebase["project_id"],
+    "private_key_id": firebase["private_key_id"],
+    "private_key": firebase["private_key"],
+    "client_email": firebase["client_email"],
+    "client_id": firebase["client_id"],
+    "auth_uri": firebase["auth_uri"],
+    "token_uri": firebase["token_uri"],
+    "auth_provider_x509_cert_url": firebase["auth_provider_x509_cert_url"],
+    "client_x509_cert_url": firebase["client_x509_cert_url"]
 }
 
 def send_fcm_v1(token, title, body):

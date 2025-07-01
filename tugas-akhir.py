@@ -21,15 +21,6 @@ if not firebase_admin._apps:
         'databaseURL': FIREBASE_DATABASE_URL
     })
 
-# Listener untuk sensor tanah
-def listen_soil_moisture():
-    def callback(event):
-        if event.data == "ideal":
-            send_browser_notification("Kelembaban Tanah Ideal", "Kelembaban Tanah Anda Sudah Ideal")
-    db.reference('/sensor/tanah').listen(callback)
-
-listen_soil_moisture()
-
 ref_status = db.reference("/pompa/manual")
 ref_otomatis = db.reference("/pompa/otomatis")
 

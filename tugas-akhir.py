@@ -11,7 +11,7 @@ import io
 import re
 import pytz
 
-# ------------ BAGIAN ATAS (Auto-update via Firebase) ------------
+# ------------ BAGIAN ATAS  ------------
 firebase_config = dict(st.secrets["firebase"])
 cred = credentials.Certificate(firebase_config)
 FIREBASE_DATABASE_URL = st.secrets["firebase"]["database_url"]
@@ -57,7 +57,6 @@ def refresh_data():
 
 def refresh_bagian_atas():
     st.session_state.last_refresh_atas = time.time()
-    # Tidak perlu rerun karena bagian atas auto-update via Firebase
 
 def refresh_bagian_bawah():
     st.session_state.last_refresh_bawah = time.time()
@@ -90,7 +89,6 @@ def get_latest_sensor_data():
     asap = db.reference('/sensor/asap').get()
     api = db.reference('/sensor/api').get()
     
-    # Notifikasi jika kelembaban tanah ideal
     if kelembaban == "ideal" and st.session_state.get('last_tanah_notif') != "ideal":
         send_browser_notification("Kelembaban Tanah", "Kelembaban Tanah Sudah Ideal")
         st.session_state.last_tanah_notif = "ideal"
@@ -361,7 +359,7 @@ with col3:
     </div>
     """, unsafe_allow_html=True)
 with col4:
-    st.button("↻", key="refresh_atas", on_click=refresh_bagian_atas, help="Refresh Bagian Atas")
+    st.button("Refresh", key="refresh_atas", on_click=refresh_bagian_atas, help="Refresh Bagian Atas")
 
 # ------------ BAGIAN TENGAH (Manual refresh) ------------
 colA, colB = st.columns([3,2])
@@ -721,7 +719,7 @@ with notif_col_buttons[3]:
         st.session_state.show_delete_modal = True
         st.session_state.delete_no = 1
 with notif_col_buttons[4]:
-    st.button("↻", key="refresh_bawah", on_click=refresh_bagian_bawah, help="Refresh Bagian Bawah")
+    st.button("Refresh", key="refresh_bawah", on_click=refresh_bagian_bawah, help="Refresh Bagian Bawah")
 
 if not tabel.empty:
     st.dataframe(tabel, hide_index=True, use_container_width=True)

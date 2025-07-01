@@ -14,3 +14,4 @@ google-auth-httplib2
 streamlit-js-eval
 fastapi
 uvicorn
+server

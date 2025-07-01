@@ -13,10 +13,11 @@ import re
 
 firebase_config = dict(st.secrets["firebase"])
 cred = credentials.Certificate(firebase_config)
+FIREBASE_DATABASE_URL = st.secrets["FIREBASE"]["database_url"]
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred, {
-        'databaseURL': firebase[FIREBASE_DATABASE_URL]
+        'databaseURL': FIREBASE_DATABASE_URL
     })
 
 ref_status = db.reference("/pompa/manual")

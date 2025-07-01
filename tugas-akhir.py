@@ -4,12 +4,14 @@ from firebase_admin import credentials, db
 import pandas as pd
 import mysql.connector
 from sqlalchemy import create_engine
-from datetime import date, datetime
+from datetime import date, datetime, time
 import plotly.graph_objs as go
 import time
 import io
 import re
+import pytz
 
+# ------------ BAGIAN ATAS ------------
 firebase_config = dict(st.secrets["firebase"])
 cred = credentials.Certificate(firebase_config)
 FIREBASE_DATABASE_URL = st.secrets["firebase"]["database_url"]
@@ -18,6 +20,15 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app(cred, {
         'databaseURL': FIREBASE_DATABASE_URL
     })
+
+# Listener untuk sensor tanah
+def listen_soil_moisture():
+    def callback(event):
+        if event.data == "ideal":
+            send_browser_notification("Kelembaban Tanah Ideal", "Kelembaban Tanah Anda Sudah Ideal")
+    db.reference('/sensor/tanah').listen(callback)
+
+listen_soil_moisture()
 
 ref_status = db.reference("/pompa/manual")
 ref_otomatis = db.reference("/pompa/otomatis")
@@ -120,6 +131,14 @@ st.markdown("""
     }
     .notif-left {flex:1;}
     .notif-right {flex:1; display:flex; flex-direction:row; justify-content:flex-end; gap:8px;}
+    .time-input-container {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .time-input {
+        width: 60px !important;
+    }
     @media (max-width: 600px) {
         .sensor-row {flex-direction: column; gap: 4px;}
         .sensor-box {flex: 1 1 100%; font-size: 15px; margin-bottom: 6px;}
@@ -363,7 +382,7 @@ with colB:
 def save_sensor_to_mysql(data):
     conn = mysql.connector.connect(**mysql_conf)
     cursor = conn.cursor()
-    now = pd.Timestamp.now()
+    now = pd.Timestamp.now(tz=pytz.timezone('Asia/Jakarta'))
     query = ("INSERT INTO sensor (suhu, asap, api, tanah, tanggal, jam) VALUES (%s,%s,%s,%s,%s,%s)")
     cursor.execute(query, (
         data["suhu"], data["asap"], data["api"], data["kelembaban_tanah"],
@@ -375,7 +394,7 @@ def save_sensor_to_mysql(data):
 
 if st.session_state.auto_save:
     last_save = st.session_state.get('last_sensor_save', "")
-    current_hour = pd.Timestamp.now().strftime('%Y-%m-%d %H')
+    current_hour = pd.Timestamp.now(tz=pytz.timezone('Asia/Jakarta')).strftime('%Y-%m-%d %H')
     if last_save != current_hour:
         save_sensor_to_mysql(data)
         st.session_state['last_sensor_save'] = current_hour
@@ -386,7 +405,7 @@ if st.session_state.auto_save:
         if last_val != topik_val:
             conn = mysql.connector.connect(**mysql_conf)
             cursor = conn.cursor()
-            now = pd.Timestamp.now()
+            now = pd.Timestamp.now(tz=pytz.timezone('Asia/Jakarta'))
             cursor.execute(
                 "INSERT INTO notif (kebakaran, tanah, pompa, tanggal, jam) VALUES (%s,%s,%s,%s,%s)",
                 (
@@ -402,6 +421,7 @@ if st.session_state.auto_save:
             conn.close()
             st.session_state[f"last_notif_{kolom}"] = topik_val
 
+# ------------ BAGIAN BAWAH ------------
 df = get_mysql_data()
 available_sensors = ["api", "asap", "tanah", "suhu"]
 
@@ -429,6 +449,7 @@ with col2:
 excel_name = f"Data Sensor {tanggal_selected}.xlsx"
 df_tanggal = df[df["tanggal"] == tanggal_selected]
 
+# Tombol Aksi untuk Tabel Sensor
 col_buttons = st.columns([1,1,1,1,1])
 with col_buttons[0]:
     if not df_tanggal.empty:
@@ -436,20 +457,50 @@ with col_buttons[0]:
         output = io.BytesIO()
         to_download.to_excel(output, index=False, engine='xlsxwriter')
         st.download_button(label="Print", data=output.getvalue(), file_name=excel_name, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", on_click=lambda: st.success("Download Data Sensor berhasil!"))
+
+# Modal Tambah Data
+if "show_add_modal" not in st.session_state:
+    st.session_state.show_add_modal = False
+
+if st.session_state.show_add_modal:
+    with st.form("add_form"):
+        st.write("### Tambah Data")
+        add_cols = st.columns([1,1,1,1,1])
+        with add_cols[0]:
+            add_tanggal = st.date_input("Tanggal", key="add_tanggal")
+        with add_cols[1]:
+            st.markdown("<div class='time-input-container'><div>Jam:</div>", unsafe_allow_html=True)
+            add_jam = st.selectbox("", list(range(24)), key="add_jam", label_visibility="collapsed")
+        with add_cols[2]:
+            st.markdown("<div class='time-input-container'><div>Menit:</div>", unsafe_allow_html=True)
+            add_menit = st.selectbox("", list(range(60)), key="add_menit", label_visibility="collapsed")
+        with add_cols[3]:
+            add_kebakaran = st.selectbox("Kebakaran", ["iya", "tidak", "mungkin"], key="add_kebakaran")
+        with add_cols[4]:
+            add_pompa = st.selectbox("Pompa", ["on", "off"], key="add_pompa")
+        
+        submitted = st.form_submit_button("Tambah")
+        if submitted:
+            conn = mysql.connector.connect(**mysql_conf)
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    "INSERT INTO notif (tanggal, jam, kebakaran, pompa, tanah) VALUES (%s,%s,%s,%s,%s)",
+                    (add_tanggal, f"{add_jam:02d}:{add_menit:02d}:00", add_kebakaran, add_pompa, "normal")
+                )
+                conn.commit()
+                st.success("Data berhasil ditambahkan!")
+                st.session_state.show_add_modal = False
+                refresh_data()
+            except Exception as e:
+                st.error(f"Gagal menambahkan data: {e}")
+            finally:
+                cursor.close()
+                conn.close()
+
 with col_buttons[1]:
     if st.button("Tambah"):
-        conn = mysql.connector.connect(**mysql_conf)
-        cursor = conn.cursor()
-        now = pd.Timestamp.now()
-        cursor.execute(
-            "INSERT INTO sensor (suhu, asap, api, tanah, tanggal, jam) VALUES (%s,%s,%s,%s,%s,%s)",
-            (0, "tidak", "tidak", 0, now.date(), now.strftime("%H:%M:%S"))
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
-        st.success("Data berhasil ditambahkan!")
-        refresh_data()
+        st.session_state.show_add_modal = True
 
 st.write(f"#### Grafik {sensor_selected.capitalize()} (History per Jam)")
 
@@ -525,58 +576,96 @@ notif_df['jam'] = notif_df['jam'].apply(extract_hhmm)
 
 tabel = notif_df[["No", "tanggal", "jam", "kebakaran", "pompa", "tanah"]]
 
-# Form for editing data
-with st.form("edit_form"):
-    st.write("### Edit Data")
-    edit_cols = st.columns([1,1,1,1,1,1])
-    with edit_cols[0]:
-        edit_no = st.number_input("No", min_value=1, max_value=len(tabel), step=1)
-    with edit_cols[1]:
-        edit_tanggal = st.date_input("Tanggal")
-    with edit_cols[2]:
-        edit_jam = st.time_input("Jam")
-    with edit_cols[3]:
-        edit_kebakaran = st.selectbox("Kebakaran", ["iya", "tidak", "mungkin"])
-    with edit_cols[4]:
-        edit_pompa = st.selectbox("Pompa", ["on", "off"])
-    with edit_cols[5]:
-        edit_tanah = st.selectbox("Tanah", ["kering", "basah", "normal"])
-    
-    submitted = st.form_submit_button("Simpan Perubahan")
-    if submitted:
-        conn = mysql.connector.connect(**mysql_conf)
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                "UPDATE notif SET tanggal=%s, jam=%s, kebakaran=%s, pompa=%s, tanah=%s WHERE id=%s",
-                (edit_tanggal, edit_jam.strftime("%H:%M:%S"), edit_kebakaran, edit_pompa, edit_tanah, edit_no))
-            conn.commit()
-            st.success("Data berhasil diupdate!")
-            refresh_data()
-        except Exception as e:
-            st.error(f"Gagal mengupdate data: {e}")
-        finally:
-            cursor.close()
-            conn.close()
+# Modal Edit Data
+if "show_edit_modal" not in st.session_state:
+    st.session_state.show_edit_modal = False
+    st.session_state.edit_no = 1
 
-# Delete button
-if st.button("Hapus Data Terpilih"):
-    conn = mysql.connector.connect(**mysql_conf)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("DELETE FROM notif WHERE id=%s", (edit_no,))
-        conn.commit()
-        st.success("Data berhasil dihapus!")
-        refresh_data()
-    except Exception as e:
-        st.error(f"Gagal menghapus data: {e}")
-    finally:
-        cursor.close()
-        conn.close()
+if st.session_state.show_edit_modal:
+    with st.form("edit_form"):
+        st.write("### Edit Data")
+        edit_cols = st.columns([1,1,1,1,1])
+        with edit_cols[0]:
+            edit_no = st.number_input("No", min_value=1, max_value=len(tabel), step=1, key="edit_no_input", value=st.session_state.edit_no)
+        with edit_cols[1]:
+            edit_tanggal = st.date_input("Tanggal", key="edit_tanggal")
+        with edit_cols[2]:
+            st.markdown("<div class='time-input-container'><div>Jam:</div>", unsafe_allow_html=True)
+            edit_jam = st.selectbox("", list(range(24)), key="edit_jam", label_visibility="collapsed")
+        with edit_cols[3]:
+            st.markdown("<div class='time-input-container'><div>Menit:</div>", unsafe_allow_html=True)
+            edit_menit = st.selectbox("", list(range(60)), key="edit_menit", label_visibility="collapsed")
+        with edit_cols[4]:
+            edit_kebakaran = st.selectbox("Kebakaran", ["iya", "tidak", "mungkin"], key="edit_kebakaran")
+        
+        edit_cols2 = st.columns([1,1])
+        with edit_cols2[0]:
+            edit_pompa = st.selectbox("Pompa", ["on", "off"], key="edit_pompa")
+        with edit_cols2[1]:
+            edit_tanah = st.selectbox("Tanah", ["kering", "basah", "normal"], key="edit_tanah")
+        
+        submitted = st.form_submit_button("Simpan Perubahan")
+        if submitted:
+            conn = mysql.connector.connect(**mysql_conf)
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    "UPDATE notif SET tanggal=%s, jam=%s, kebakaran=%s, pompa=%s, tanah=%s WHERE no=%s",
+                    (edit_tanggal, f"{edit_jam:02d}:{edit_menit:02d}:00", edit_kebakaran, edit_pompa, edit_tanah, edit_no)
+                )
+                conn.commit()
+                st.success("Data berhasil diupdate!")
+                st.session_state.show_edit_modal = False
+                refresh_data()
+            except Exception as e:
+                st.error(f"Gagal mengupdate data: {e}")
+            finally:
+                cursor.close()
+                conn.close()
+
+# Modal Hapus Data
+if "show_delete_modal" not in st.session_state:
+    st.session_state.show_delete_modal = False
+    st.session_state.delete_no = 1
+
+if st.session_state.show_delete_modal:
+    with st.form("delete_form"):
+        st.write("### Hapus Data")
+        delete_no = st.number_input("No", min_value=1, max_value=len(tabel), step=1, key="delete_no_input", value=st.session_state.delete_no)
+        submitted = st.form_submit_button("Hapus")
+        if submitted:
+            conn = mysql.connector.connect(**mysql_conf)
+            cursor = conn.cursor()
+            try:
+                cursor.execute("DELETE FROM notif WHERE no=%s", (delete_no,))
+                conn.commit()
+                st.success("Data berhasil dihapus!")
+                st.session_state.show_delete_modal = False
+                refresh_data()
+            except Exception as e:
+                st.error(f"Gagal menghapus data: {e}")
+            finally:
+                cursor.close()
+                conn.close()
+
+# Tombol Aksi untuk Tabel Notifikasi
+notif_col_buttons = st.columns([1,1,1,1,1])
+with notif_col_buttons[0]:
+    if not tabel.empty:
+        output2 = io.BytesIO()
+        tabel.to_excel(output2, index=False, engine='xlsxwriter')
+        st.download_button(label="Print", data=output2.getvalue(), file_name=f"History Notifikasi per {date.today().strftime('%Y-%m-%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", on_click=lambda: st.success("Download History Notifikasi berhasil!"))
+with notif_col_buttons[1]:
+    if st.button("Tambah", key="tambah_notif"):
+        st.session_state.show_add_modal = True
+with notif_col_buttons[2]:
+    if st.button("Ubah", key="ubah_notif"):
+        st.session_state.show_edit_modal = True
+        st.session_state.edit_no = 1
+with notif_col_buttons[3]:
+    if st.button("Hapus", key="hapus_notif"):
+        st.session_state.show_delete_modal = True
+        st.session_state.delete_no = 1
 
 if not tabel.empty:
-    output2 = io.BytesIO()
-    tabel.to_excel(output2, index=False, engine='xlsxwriter')
-    st.download_button(label="Print", data=output2.getvalue(), file_name=f"History Notifikasi per {date.today().strftime('%Y-%m-%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", on_click=lambda: st.success("Download History Notifikasi berhasil!"))
-
-st.dataframe(tabel, hide_index=True, use_container_width=True)
+    st.dataframe(tabel, hide_index=True, use_container_width=True)

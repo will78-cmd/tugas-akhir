@@ -55,6 +55,14 @@ def refresh_data():
     st.session_state.last_refresh = time.time()
     st.rerun()
 
+def refresh_bagian_atas():
+    st.session_state.last_refresh_atas = time.time()
+    # Tidak perlu rerun karena bagian atas auto-update via Firebase
+
+def refresh_bagian_bawah():
+    st.session_state.last_refresh_bawah = time.time()
+    # Tidak perlu rerun karena akan dihandle oleh tombol refresh
+
 if "manual" not in st.session_state:
     st.session_state.manual = False
 if "otomatis" not in st.session_state:
@@ -81,11 +89,20 @@ def get_latest_sensor_data():
     kelembaban = db.reference('/sensor/tanah').get()
     asap = db.reference('/sensor/asap').get()
     api = db.reference('/sensor/api').get()
+    
+    # Notifikasi jika kelembaban tanah ideal
+    if kelembaban == "ideal" and st.session_state.get('last_tanah_notif') != "ideal":
+        send_browser_notification("Kelembaban Tanah", "Kelembaban Tanah Sudah Ideal")
+        st.session_state.last_tanah_notif = "ideal"
+    elif kelembaban != "ideal":
+        st.session_state.last_tanah_notif = ""
+    
     def norm_asap(val):
         if val is None:
             return "tidak"
         v = str(val).strip().lower()
         return v
+    
     def norm_api(val):
         if val is None:
             return "tidak"
@@ -95,6 +112,7 @@ def get_latest_sensor_data():
         elif v == "tidak":
             return "tidak"
         return "tidak"
+    
     return {
         'suhu': int(suhu) if suhu and str(suhu).isdigit() else 0,
         'kelembaban_tanah': int(kelembaban) if kelembaban and str(kelembaban).isdigit() else 0,
@@ -129,6 +147,11 @@ st.markdown("""
     }
     .time-input {
         width: 60px !important;
+    }
+    .button-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
     }
     @media (max-width: 600px) {
         .sensor-row {flex-direction: column; gap: 4px;}
@@ -313,7 +336,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="switch-row">', unsafe_allow_html=True)
-col1, col2, col3 = st.columns([2,2,1])
+col1, col2, col3, col4 = st.columns([2,2,1,1])
 with col1:
     st.toggle(
         "Manual",
@@ -337,7 +360,10 @@ with col3:
         <span style="color:white;font-size:15px;font-weight:bold;">{text_status}</span>
     </div>
     """, unsafe_allow_html=True)
+with col4:
+    st.button("↻", key="refresh_atas", on_click=refresh_bagian_atas, help="Refresh Bagian Atas")
 
+# ------------ BAGIAN TENGAH (Manual refresh) ------------
 colA, colB = st.columns([3,2])
 with colA:
     st.components.v1.html("""
@@ -368,7 +394,7 @@ with colB:
     with colB1:
         st.toggle("Simpan Otomatis", value=st.session_state.auto_save, key="auto_save")
     with colB2:
-        st.button("Refresh", on_click=refresh_data)
+        st.button("Refresh", on_click=refresh_data, help="Refresh Bagian Tengah")
 
 def save_sensor_to_mysql(data):
     conn = mysql.connector.connect(**mysql_conf)
@@ -412,7 +438,6 @@ if st.session_state.auto_save:
             conn.close()
             st.session_state[f"last_notif_{kolom}"] = topik_val
 
-# ------------ BAGIAN BAWAH (Manual refresh) ------------
 df = get_mysql_data()
 available_sensors = ["api", "asap", "tanah", "suhu"]
 
@@ -440,15 +465,6 @@ with col2:
 excel_name = f"Data Sensor {tanggal_selected}.xlsx"
 df_tanggal = df[df["tanggal"] == tanggal_selected]
 
-# Tombol Aksi untuk Tabel Sensor
-col_buttons = st.columns([1,1,1,1,1])
-with col_buttons[0]:
-    if not df_tanggal.empty:
-        to_download = df_tanggal.copy()
-        output = io.BytesIO()
-        to_download.to_excel(output, index=False, engine='xlsxwriter')
-        st.download_button(label="Print", data=output.getvalue(), file_name=excel_name, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", on_click=lambda: st.success("Download Data Sensor berhasil!"))
-
 # Modal Tambah Data
 if "show_add_modal" not in st.session_state:
     st.session_state.show_add_modal = False
@@ -470,7 +486,14 @@ if st.session_state.show_add_modal:
         with add_cols[4]:
             add_pompa = st.selectbox("Pompa", ["on", "off"], key="add_pompa")
         
-        submitted = st.form_submit_button("Tambah")
+        col_button = st.columns([4,1])
+        with col_button[0]:
+            submitted = st.form_submit_button("Tambah")
+        with col_button[1]:
+            if st.form_submit_button("Batal"):
+                st.session_state.show_add_modal = False
+                st.experimental_rerun()
+        
         if submitted:
             conn = mysql.connector.connect(**mysql_conf)
             cursor = conn.cursor()
@@ -489,11 +512,30 @@ if st.session_state.show_add_modal:
                 cursor.close()
                 conn.close()
 
-with col_buttons[1]:
-    if st.button("Tambah"):
-        st.session_state.show_add_modal = True
-
+# Tombol Aksi untuk Grafik Sensor
 st.write(f"#### Grafik {sensor_selected.capitalize()} (History per Jam)")
+
+# Tambah tombol aksi untuk grafik sensor
+graf_col_buttons = st.columns([1,1,1,1,1])
+with graf_col_buttons[0]:
+    if not df_tanggal.empty:
+        to_download = df_tanggal.copy()
+        output = io.BytesIO()
+        to_download.to_excel(output, index=False, engine='xlsxwriter')
+        st.download_button(label="Print", data=output.getvalue(), file_name=excel_name, 
+                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                         on_click=lambda: st.success("Download Data Sensor berhasil!"))
+with graf_col_buttons[1]:
+    if st.button("Tambah", key="tambah_grafik"):
+        st.session_state.show_add_modal = True
+with graf_col_buttons[2]:
+    if st.button("Ubah", key="ubah_grafik"):
+        st.session_state.show_edit_modal = True
+        st.session_state.edit_no = 1
+with graf_col_buttons[3]:
+    if st.button("Hapus", key="hapus_grafik"):
+        st.session_state.show_delete_modal = True
+        st.session_state.delete_no = 1
 
 if not df_tanggal.empty and "jam" in df_tanggal:
     try:
@@ -544,10 +586,13 @@ else:
     )
     st.plotly_chart(fig, use_container_width=True)
 
+# ------------ BAGIAN BAWAH (Manual refresh) ------------
 st.write("### Histori Notifikasi")
 notif_df = get_notif_data()
 notif_df = notif_df.sort_values(by=["tanggal", "jam"], ascending=False)
 notif_df = notif_df.reset_index(drop=True)
+
+# Gunakan nomor dari database, bukan index streamlit
 notif_df["No"] = notif_df.index + 1
 
 def extract_hhmm(x):
@@ -595,7 +640,14 @@ if st.session_state.show_edit_modal:
         with edit_cols2[1]:
             edit_tanah = st.selectbox("Tanah", ["kering", "basah", "normal"], key="edit_tanah")
         
-        submitted = st.form_submit_button("Simpan Perubahan")
+        col_button = st.columns([4,1])
+        with col_button[0]:
+            submitted = st.form_submit_button("Simpan Perubahan")
+        with col_button[1]:
+            if st.form_submit_button("Batal"):
+                st.session_state.show_edit_modal = False
+                st.experimental_rerun()
+        
         if submitted:
             conn = mysql.connector.connect(**mysql_conf)
             cursor = conn.cursor()
@@ -623,7 +675,15 @@ if st.session_state.show_delete_modal:
     with st.form("delete_form"):
         st.write("### Hapus Data")
         delete_no = st.number_input("No", min_value=1, max_value=len(tabel), step=1, key="delete_no_input", value=st.session_state.delete_no)
-        submitted = st.form_submit_button("Hapus")
+        
+        col_button = st.columns([4,1])
+        with col_button[0]:
+            submitted = st.form_submit_button("Hapus")
+        with col_button[1]:
+            if st.form_submit_button("Batal"):
+                st.session_state.show_delete_modal = False
+                st.experimental_rerun()
+        
         if submitted:
             conn = mysql.connector.connect(**mysql_conf)
             cursor = conn.cursor()
@@ -640,12 +700,15 @@ if st.session_state.show_delete_modal:
                 conn.close()
 
 # Tombol Aksi untuk Tabel Notifikasi
-notif_col_buttons = st.columns([1,1,1,1,1])
+notif_col_buttons = st.columns([1,1,1,1,1,1])
 with notif_col_buttons[0]:
     if not tabel.empty:
         output2 = io.BytesIO()
         tabel.to_excel(output2, index=False, engine='xlsxwriter')
-        st.download_button(label="Print", data=output2.getvalue(), file_name=f"History Notifikasi per {date.today().strftime('%Y-%m-%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", on_click=lambda: st.success("Download History Notifikasi berhasil!"))
+        st.download_button(label="Print", data=output2.getvalue(), 
+                         file_name=f"History Notifikasi per {date.today().strftime('%Y-%m-%d')}.xlsx", 
+                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                         on_click=lambda: st.success("Download History Notifikasi berhasil!"))
 with notif_col_buttons[1]:
     if st.button("Tambah", key="tambah_notif"):
         st.session_state.show_add_modal = True
@@ -657,6 +720,8 @@ with notif_col_buttons[3]:
     if st.button("Hapus", key="hapus_notif"):
         st.session_state.show_delete_modal = True
         st.session_state.delete_no = 1
+with notif_col_buttons[4]:
+    st.button("↻", key="refresh_bawah", on_click=refresh_bagian_bawah, help="Refresh Bagian Bawah")
 
 if not tabel.empty:
     st.dataframe(tabel, hide_index=True, use_container_width=True)

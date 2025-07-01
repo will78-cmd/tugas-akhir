@@ -549,7 +549,7 @@ with st.form("edit_form"):
         try:
             cursor.execute(
                 "UPDATE notif SET tanggal=%s, jam=%s, kebakaran=%s, pompa=%s, tanah=%s WHERE id=%s",
-                (edit_tanggal, edit_jam.strftime("%H:%M:%S"), edit_kebakaran, edit_pompa, edit_tanah, edit_no)
+                (edit_tanggal, edit_jam.strftime("%H:%M:%S"), edit_kebakaran, edit_pompa, edit_tanah, edit_no))
             conn.commit()
             st.success("Data berhasil diupdate!")
             refresh_data()

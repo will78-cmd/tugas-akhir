@@ -16,7 +16,8 @@ FIREBASE_DATABASE_URL = st.secrets["firebase"]["database_url"]
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred, {
-        'databaseURL': FIREBASE_DATABASE_URL,
+        'databaseURL': FIREBASE_DATABASE_URL
+    })
 
 ref_status = db.reference("/pompa/manual")
 ref_otomatis = db.reference("/pompa/otomatis")

@@ -486,7 +486,7 @@ if st.session_state.show_add_modal:
             try:
                 cursor.execute(
                     "INSERT INTO notif (tanggal, jam, kebakaran, pompa, tanah) VALUES (%s,%s,%s,%s,%s)",
-                    (add_tanggal, f"{add_jam:02d}:{add_menit:02d}:00", add_kebakaran, add_pompa, "normal")
+                    (add_tanggal, f"{add_jam:02d}:{add_menit:02d}:00", add_kebakaran, add_pompa, "ideal")
                 )
                 conn.commit()
                 st.success("Data berhasil ditambahkan!")
@@ -602,7 +602,7 @@ if st.session_state.show_edit_modal:
         with edit_cols2[0]:
             edit_pompa = st.selectbox("Pompa", ["on", "off"], key="edit_pompa")
         with edit_cols2[1]:
-            edit_tanah = st.selectbox("Tanah", ["kering", "basah", "normal"], key="edit_tanah")
+            edit_tanah = st.selectbox("Tanah", ["kering", "basah", "ideal"], key="edit_tanah")
         
         submitted = st.form_submit_button("Simpan Perubahan")
         if submitted:

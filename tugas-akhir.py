@@ -11,7 +11,7 @@ import io
 import re
 import pytz
 
-# ------------ BAGIAN ATAS ------------
+# ------------ BAGIAN ATAS (Auto-update via Firebase) ------------
 firebase_config = dict(st.secrets["firebase"])
 cred = credentials.Certificate(firebase_config)
 FIREBASE_DATABASE_URL = st.secrets["firebase"]["database_url"]
@@ -20,6 +20,15 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app(cred, {
         'databaseURL': FIREBASE_DATABASE_URL
     })
+
+# Listener untuk sensor tanah
+def listen_soil_moisture():
+    def callback(event):
+        if event.data == "ideal":
+            send_browser_notification("Kelembaban Tanah Ideal", "Kelembaban Tanah Anda Sudah Ideal")
+    db.reference('/sensor/tanah').listen(callback)
+
+listen_soil_moisture()
 
 ref_status = db.reference("/pompa/manual")
 ref_otomatis = db.reference("/pompa/otomatis")
@@ -412,7 +421,7 @@ if st.session_state.auto_save:
             conn.close()
             st.session_state[f"last_notif_{kolom}"] = topik_val
 
-# ------------ BAGIAN BAWAH ------------
+# ------------ BAGIAN BAWAH (Manual refresh) ------------
 df = get_mysql_data()
 available_sensors = ["api", "asap", "tanah", "suhu"]
 
@@ -477,7 +486,7 @@ if st.session_state.show_add_modal:
             try:
                 cursor.execute(
                     "INSERT INTO notif (tanggal, jam, kebakaran, pompa, tanah) VALUES (%s,%s,%s,%s,%s)",
-                    (add_tanggal, f"{add_jam:02d}:{add_menit:02d}:00", add_kebakaran, add_pompa, "ideal")
+                    (add_tanggal, f"{add_jam:02d}:{add_menit:02d}:00", add_kebakaran, add_pompa, "normal")
                 )
                 conn.commit()
                 st.success("Data berhasil ditambahkan!")
@@ -593,7 +602,7 @@ if st.session_state.show_edit_modal:
         with edit_cols2[0]:
             edit_pompa = st.selectbox("Pompa", ["on", "off"], key="edit_pompa")
         with edit_cols2[1]:
-            edit_tanah = st.selectbox("Tanah", ["kering", "basah", "ideal"], key="edit_tanah")
+            edit_tanah = st.selectbox("Tanah", ["kering", "basah", "normal"], key="edit_tanah")
         
         submitted = st.form_submit_button("Simpan Perubahan")
         if submitted:

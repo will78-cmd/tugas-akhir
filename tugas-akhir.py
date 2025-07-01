@@ -54,14 +54,7 @@ def get_notif_data():
 def refresh_data():
     st.session_state.last_refresh = time.time()
     st.rerun()
-
-def refresh_bagian_atas():
-    st.session_state.last_refresh_atas = time.time()
-
-def refresh_bagian_bawah():
-    st.session_state.last_refresh_bawah = time.time()
-    # Tidak perlu rerun karena akan dihandle oleh tombol refresh
-
+    
 if "manual" not in st.session_state:
     st.session_state.manual = False
 if "otomatis" not in st.session_state:

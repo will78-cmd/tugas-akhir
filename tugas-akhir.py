@@ -1,5 +1,4 @@
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
 import firebase_admin
 from firebase_admin import credentials, db
 import pandas as pd
@@ -18,7 +17,6 @@ FIREBASE_DATABASE_URL = st.secrets["firebase"]["database_url"]
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred, {
         'databaseURL': FIREBASE_DATABASE_URL
-    })
 
 ref_status = db.reference("/pompa/manual")
 ref_otomatis = db.reference("/pompa/otomatis")
@@ -38,19 +36,21 @@ def get_sqlalchemy_engine():
         f"mysql+pymysql://{mysql_conf['user']}:{mysql_conf['password']}@{mysql_conf['host']}:{mysql_conf['port']}/{mysql_conf['database']}"
     )
 
-@st.cache_data(ttl=60)
 def get_mysql_data():
     engine = get_sqlalchemy_engine()
     df = pd.read_sql("SELECT * FROM sensor", engine)
     engine.dispose()
     return df
 
-@st.cache_data(ttl=60)
 def get_notif_data():
     engine = get_sqlalchemy_engine()
     df = pd.read_sql("SELECT * FROM notif", engine)
     engine.dispose()
     return df
+
+def refresh_data():
+    st.session_state.last_refresh = time.time()
+    st.rerun()
 
 if "manual" not in st.session_state:
     st.session_state.manual = False
@@ -138,8 +138,6 @@ if ('Notification' in window && Notification.permission !== "granted") {
 """, height=0)
 
 st.markdown("<h4 style='text-align: center;'>Data Sensor Terbaru</h4>", unsafe_allow_html=True)
-
-st_autorefresh(interval=10000, key="widgetrefresh")
 
 data = get_latest_sensor_data()
 
@@ -355,7 +353,11 @@ with colA:
 with colB:
     if "auto_save" not in st.session_state:
         st.session_state.auto_save = False
-    st.toggle("Simpan Otomatis", value=st.session_state.auto_save, key="auto_save")
+    colB1, colB2 = st.columns([2,1])
+    with colB1:
+        st.toggle("Simpan Otomatis", value=st.session_state.auto_save, key="auto_save")
+    with colB2:
+        st.button("Refresh", on_click=refresh_data)
 
 def save_sensor_to_mysql(data):
     conn = mysql.connector.connect(**mysql_conf)
@@ -425,11 +427,29 @@ with col2:
 
 excel_name = f"Data Sensor {tanggal_selected}.xlsx"
 df_tanggal = df[df["tanggal"] == tanggal_selected]
-if not df_tanggal.empty:
-    to_download = df_tanggal.copy()
-    output = io.BytesIO()
-    to_download.to_excel(output, index=False, engine='xlsxwriter')
-    st.download_button(label="Print", data=output.getvalue(), file_name=excel_name, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", on_click=lambda: st.success("Download Data Sensor berhasil!"))
+
+col_buttons = st.columns([1,1,1,1,1])
+with col_buttons[0]:
+    if not df_tanggal.empty:
+        to_download = df_tanggal.copy()
+        output = io.BytesIO()
+        to_download.to_excel(output, index=False, engine='xlsxwriter')
+        st.download_button(label="Print", data=output.getvalue(), file_name=excel_name, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", on_click=lambda: st.success("Download Data Sensor berhasil!"))
+with col_buttons[1]:
+    if st.button("Tambah"):
+        conn = mysql.connector.connect(**mysql_conf)
+        cursor = conn.cursor()
+        now = pd.Timestamp.now()
+        cursor.execute(
+            "INSERT INTO sensor (suhu, asap, api, tanah, tanggal, jam) VALUES (%s,%s,%s,%s,%s,%s)",
+            (0, "tidak", "tidak", 0, now.date(), now.strftime("%H:%M:%S"))
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        st.success("Data berhasil ditambahkan!")
+        refresh_data()
+
 st.write(f"#### Grafik {sensor_selected.capitalize()} (History per Jam)")
 
 if not df_tanggal.empty and "jam" in df_tanggal:
@@ -503,6 +523,55 @@ def extract_hhmm(x):
 notif_df['jam'] = notif_df['jam'].apply(extract_hhmm)
 
 tabel = notif_df[["No", "tanggal", "jam", "kebakaran", "pompa", "tanah"]]
+
+# Form for editing data
+with st.form("edit_form"):
+    st.write("### Edit Data")
+    edit_cols = st.columns([1,1,1,1,1,1])
+    with edit_cols[0]:
+        edit_no = st.number_input("No", min_value=1, max_value=len(tabel), step=1)
+    with edit_cols[1]:
+        edit_tanggal = st.date_input("Tanggal")
+    with edit_cols[2]:
+        edit_jam = st.time_input("Jam")
+    with edit_cols[3]:
+        edit_kebakaran = st.selectbox("Kebakaran", ["iya", "tidak", "mungkin"])
+    with edit_cols[4]:
+        edit_pompa = st.selectbox("Pompa", ["on", "off"])
+    with edit_cols[5]:
+        edit_tanah = st.selectbox("Tanah", ["kering", "basah", "normal"])
+    
+    submitted = st.form_submit_button("Simpan Perubahan")
+    if submitted:
+        conn = mysql.connector.connect(**mysql_conf)
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE notif SET tanggal=%s, jam=%s, kebakaran=%s, pompa=%s, tanah=%s WHERE id=%s",
+                (edit_tanggal, edit_jam.strftime("%H:%M:%S"), edit_kebakaran, edit_pompa, edit_tanah, edit_no)
+            conn.commit()
+            st.success("Data berhasil diupdate!")
+            refresh_data()
+        except Exception as e:
+            st.error(f"Gagal mengupdate data: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+
+# Delete button
+if st.button("Hapus Data Terpilih"):
+    conn = mysql.connector.connect(**mysql_conf)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM notif WHERE id=%s", (edit_no,))
+        conn.commit()
+        st.success("Data berhasil dihapus!")
+        refresh_data()
+    except Exception as e:
+        st.error(f"Gagal menghapus data: {e}")
+    finally:
+        cursor.close()
+        conn.close()
 
 if not tabel.empty:
     output2 = io.BytesIO()

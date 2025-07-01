@@ -13,7 +13,7 @@ import re
 
 firebase_config = dict(st.secrets["firebase"])
 cred = credentials.Certificate(firebase_config)
-FIREBASE_DATABASE_URL = st.secrets["FIREBASE"]["database_url"]
+FIREBASE_DATABASE_URL = st.secrets["firebase"]["database_url"]
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred, {

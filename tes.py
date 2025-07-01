@@ -4,12 +4,14 @@ import os
 import requests
 from google.oauth2 import service_account
 import google.auth.transport.requests
-from streamlit_js_eval import streamlit_js_eval
+from fastapi import FastAPI, Request
+from streamlit.web.server.websocket_headers import _get_websocket_headers
+from streamlit.runtime.scriptrunner import get_script_run_ctx
+from streamlit.server.server import Server
 
 st.set_page_config(page_title="Web Push Notifikasi FCM", layout="centered")
-st.title("Web Push Notification FCM (Format Full TOML)")
+st.title("Dashboard Kirim Notifikasi FCM")
 
-# 1. Ambil SEMUA variabel dari [firebase] secrets
 firebase = st.secrets["firebase"]
 
 FIREBASE_CONFIG = {
@@ -22,7 +24,6 @@ FIREBASE_CONFIG = {
 VAPID_KEY = firebase["FIREBASE_VAPID_KEY"]
 PROJECT_ID = firebase["FIREBASE_PROJECT_ID"]
 
-# 2. Bangun dict service account info dari secrets TOML
 service_account_info = {
     "type": firebase["type"],
     "project_id": firebase["project_id"],
@@ -35,6 +36,23 @@ service_account_info = {
     "auth_provider_x509_cert_url": firebase["auth_provider_x509_cert_url"],
     "client_x509_cert_url": firebase["client_x509_cert_url"]
 }
+
+TOKENS_FILE = "tokens.json"
+
+def save_token(name, token):
+    tokens = {}
+    if os.path.exists(TOKENS_FILE):
+        with open(TOKENS_FILE, "r") as f:
+            tokens = json.load(f)
+    tokens[name] = token
+    with open(TOKENS_FILE, "w") as f:
+        json.dump(tokens, f)
+
+def load_tokens():
+    if os.path.exists(TOKENS_FILE):
+        with open(TOKENS_FILE, "r") as f:
+            return json.load(f)
+    return {}
 
 def send_fcm_v1(token, title, body):
     credentials = service_account.Credentials.from_service_account_info(
@@ -62,82 +80,16 @@ def send_fcm_v1(token, title, body):
     resp = requests.post(url, headers=headers, data=json.dumps(data))
     return resp
 
-# 3. Simpan token device hanya di server, jangan pernah di repo
-TOKENS_FILE = "tokens.json"
-
-def save_token(name, token):
-    tokens = {}
-    if os.path.exists(TOKENS_FILE):
-        with open(TOKENS_FILE, "r") as f:
-            tokens = json.load(f)
-    tokens[name] = token
-    with open(TOKENS_FILE, "w") as f:
-        json.dump(tokens, f)
-
-def load_tokens():
-    if os.path.exists(TOKENS_FILE):
-        with open(TOKENS_FILE, "r") as f:
-            return json.load(f)
-    return {}
-
-# 4. Komponen HTML/JS frontend untuk register token device (hanya pakai public info dari secrets)
-html_code = f"""
-<link rel="manifest" href="/manifest.json">
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
-<button onclick="getTokenFCM()" id="notif-btn">Izinkan Notifikasi</button>
-<p id="notif-status"></p>
-<script>
-const firebaseConfig = {{
-    apiKey: "{FIREBASE_CONFIG['apiKey']}",
-    authDomain: "{FIREBASE_CONFIG['authDomain']}",
-    projectId: "{FIREBASE_CONFIG['projectId']}",
-    messagingSenderId: "{FIREBASE_CONFIG['messagingSenderId']}",
-    appId: "{FIREBASE_CONFIG['appId']}"
-}};
-if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-const messaging = firebase.messaging();
-
-async function getTokenFCM() {{
-    if ('serviceWorker' in navigator) {{
-        let reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-        messaging.useServiceWorker(reg);
-        try {{
-            let token = await messaging.getToken({{ vapidKey: '{VAPID_KEY}' }});
-            document.getElementById("notif-status").innerText = "Token berhasil diambil dan dikirim ke backend!";
-            localStorage.setItem("fcm_token", token);
-        }} catch(e) {{
-            document.getElementById("notif-status").innerText = "Error: " + e;
-            localStorage.setItem("fcm_token", "");
-        }}
-    }}
-}}
-messaging.onMessage(function(payload) {{
-    alert("Push notification diterima: " + payload.notification.title + "\\n" + payload.notification.body);
-}});
-</script>
-"""
-st.components.v1.html(html_code, height=170)
-
-# 5. Ambil token dari localStorage via streamlit-js-eval
-token = streamlit_js_eval(js_expressions="localStorage.getItem('fcm_token')", key="fcm_token")
-
-if token and token != "null" and len(token) > 10:
-    with st.form("save_token_form"):
-        st.success("Token berhasil diterima di backend!")
-        device_name = st.text_input("Nama device (misal: HP/Laptop):", "")
-        submitted = st.form_submit_button("Simpan Token Device")
-        if submitted and device_name.strip():
-            save_token(device_name.strip(), token)
-            st.success(f"Token {device_name.strip()} berhasil disimpan!")
+# ⬇️ Tampilkan link ke GitHub Pages untuk aktifkan notifikasi
+st.markdown("### Aktifkan notifikasi:")
+st.markdown("[Klik untuk aktifkan notifikasi di perangkat](https://wildan-git78.github.io/my-repo/)", unsafe_allow_html=True)
 
 tokens = load_tokens()
 if tokens:
-    st.write("### Device yang sudah siap menerima notifikasi:")
+    st.write("### Device yang siap menerima notifikasi:")
     for name, tkn in tokens.items():
         st.write(f"- **{name}**: {tkn[:15]}...")
 
-    # Form kirim notifikasi
     with st.form("send_notif"):
         device_choices = list(tokens.keys()) + ["SEMUA"]
         selected = st.multiselect("Pilih device", device_choices, default="SEMUA")
@@ -152,18 +104,23 @@ if tokens:
             for tkn in targets:
                 resp = send_fcm_v1(tkn, notif_title, notif_body)
                 if resp.status_code == 200:
-                    st.success("Notifikasi berhasil dikirim ke device.")
+                    st.success("✅ Notifikasi berhasil dikirim.")
                 else:
-                    st.error(f"Error {resp.status_code}: {resp.text}")
+                    st.error(f"❌ Error {resp.status_code}: {resp.text}")
 else:
-    st.info("Belum ada device yang siap menerima notifikasi. Silakan akses dari HP/laptop dan izinkan notifikasi.")
+    st.info("Belum ada device yang mendaftar notifikasi.")
 
-st.markdown("""
----
-**Tips:**
-- Semua variabel rahasia harus di secrets [firebase] (format field TOML, bukan JSON).
-- Tidak ada file rahasia di repo! Kode hanya baca rahasia dari st.secrets.
-- File `firebase-messaging-sw.js`, `manifest.json`, `icon.png` wajib di root/public repo.
-- Website **HARUS diakses via HTTPS**.
-- Jangan upload `tokens.json` ke repo, hanya untuk penyimpanan sementara di server.
-""")
+# ⬇️ Tambah route handler untuk POST dari GitHub Pages
+def register_token_receiver(app: FastAPI):
+    @app.post("/save-token")
+    async def save_token_api(request: Request):
+        data = await request.json()
+        token = data.get("token")
+        device_name = data.get("device_name", "unknown")
+        if token:
+            save_token(device_name, token)
+            return {"status": "success", "message": "Token saved"}
+        return {"status": "error", "message": "No token provided"}
+
+# Integrasi FastAPI dengan Streamlit
+register_token_receiver(Server.get_current()._api_app)

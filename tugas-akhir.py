@@ -358,8 +358,6 @@ with col3:
         <span style="color:white;font-size:15px;font-weight:bold;">{text_status}</span>
     </div>
     """, unsafe_allow_html=True)
-with col4:
-    st.button("Refresh", key="refresh_atas", on_click=refresh_bagian_atas, help="Refresh Bagian Atas")
 
 # ------------ BAGIAN TENGAH (Manual refresh) ------------
 colA, colB = st.columns([3,2])
@@ -392,7 +390,7 @@ with colB:
     with colB1:
         st.toggle("Simpan Otomatis", value=st.session_state.auto_save, key="auto_save")
     with colB2:
-        st.button("Refresh", on_click=refresh_data, help="Refresh Bagian Tengah")
+        st.button("Refresh", on_click=refresh_data, help="Refresh")
 
 def save_sensor_to_mysql(data):
     conn = mysql.connector.connect(**mysql_conf)
@@ -718,8 +716,6 @@ with notif_col_buttons[3]:
     if st.button("Hapus", key="hapus_notif"):
         st.session_state.show_delete_modal = True
         st.session_state.delete_no = 1
-with notif_col_buttons[4]:
-    st.button("Refresh", key="refresh_bawah", on_click=refresh_bagian_bawah, help="Refresh Bagian Bawah")
-
+    
 if not tabel.empty:
     st.dataframe(tabel, hide_index=True, use_container_width=True)

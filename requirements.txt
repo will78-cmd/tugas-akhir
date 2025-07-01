@@ -10,3 +10,4 @@ XlsxWriter
 requests
 google-auth
 streamlit-js-eval
+pytz

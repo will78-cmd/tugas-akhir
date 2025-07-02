@@ -225,11 +225,23 @@ with col3:
 
 # ... [Kode sebelumnya tetap sama sampai bagian bawah] ...
 
-# ------------ BAGIAN BAWAH (Manual refresh) ------------
+# ------------ BAGIAN BAWAH - TABEL NOTIFIKASI ------------
 st.write("### Histori Notifikasi")
-notif_df = get_notif_data()
-notif_df = notif_df.sort_values(by=["tanggal", "jam"], ascending=False)
-notif_df = notif_df.reset_index(drop=True)
+
+# Tombol Aksi untuk Tabel Notifikasi - DITAMBAHKAN DI SINI
+notif_action_cols = st.columns([1,1,1,1,5])  # 5 kolom kosong untuk spacing
+with notif_action_cols[0]:
+    if st.button("🔄 Refresh Notifikasi", key="refresh_notif"):
+        refresh_data()
+with notif_action_cols[1]:
+    if st.button("➕ Tambah Notifikasi", key="tambah_notif"):
+        st.session_state.show_add_notif_modal = True
+with notif_action_cols[2]:
+    if st.button("✏️ Edit Notifikasi", key="edit_notif"):
+        st.session_state.show_edit_notif_modal = True
+with notif_action_cols[3]:
+    if st.button("🗑️ Hapus Notifikasi", key="hapus_notif"):
+        st.session_state.show_delete_notif_modal = True
 
 # Modal Tambah Notifikasi
 if "show_add_notif_modal" not in st.session_state:
@@ -237,192 +249,214 @@ if "show_add_notif_modal" not in st.session_state:
 
 if st.session_state.show_add_notif_modal:
     with st.form("add_notif_form"):
-        st.write("### Tambah Notifikasi")
+        st.write("### Form Tambah Notifikasi")
         
-        add_cols = st.columns([1,1,1])
-        with add_cols[0]:
-            add_tanggal = st.date_input("Tanggal", key="add_notif_tanggal")
-        with add_cols[1]:
-            st.markdown("<div class='time-input-container'><div>Jam:</div>", unsafe_allow_html=True)
-            add_jam = st.selectbox("", list(range(24)), key="add_notif_jam", label_visibility="collapsed")
-        with add_cols[2]:
-            st.markdown("<div class='time-input-container'><div>Menit:</div>", unsafe_allow_html=True)
-            add_menit = st.selectbox("", list(range(60)), key="add_notif_menit", label_visibility="collapsed")
+        cols = st.columns(3)
+        with cols[0]:
+            tanggal = st.date_input("Tanggal", key="notif_tanggal")
+        with cols[1]:
+            jam = st.number_input("Jam", min_value=0, max_value=23, value=12, key="notif_jam")
+        with cols[2]:
+            menit = st.number_input("Menit", min_value=0, max_value=59, value=0, key="notif_menit")
         
-        add_cols2 = st.columns([1,1,1])
-        with add_cols2[0]:
-            add_kebakaran = st.selectbox("Status Kebakaran", ["iya", "tidak", "mungkin"], key="add_notif_kebakaran")
-        with add_cols2[1]:
-            add_pompa = st.selectbox("Status Pompa", ["on", "off"], key="add_notif_pompa")
-        with add_cols2[2]:
-            add_tanah = st.selectbox("Status Tanah", ["kering", "basah", "normal"], key="add_notif_tanah")
+        cols2 = st.columns(3)
+        with cols2[0]:
+            kebakaran = st.selectbox("Status Kebakaran", ["tidak", "iya", "mungkin"], key="notif_kebakaran")
+        with cols2[1]:
+            pompa = st.selectbox("Status Pompa", ["off", "on"], key="notif_pompa")
+        with cols2[2]:
+            tanah = st.selectbox("Status Tanah", ["normal", "kering", "basah"], key="notif_tanah")
         
-        col_button = st.columns([4,1])
-        with col_button[0]:
-            submitted = st.form_submit_button("Tambah")
-        with col_button[1]:
-            if st.form_submit_button("Batal"):
-                st.session_state.show_add_notif_modal = False
-                st.experimental_rerun()
-        
-        if submitted:
-            conn = mysql.connector.connect(**mysql_conf)
-            cursor = conn.cursor()
-            try:
-                # Tidak perlu menyertakan no karena auto increment
-                cursor.execute(
-                    "INSERT INTO notif (tanggal, jam, kebakaran, pompa, tanah) VALUES (%s,%s,%s,%s,%s)",
-                    (add_tanggal, f"{add_jam:02d}:{add_menit:02d}:00", add_kebakaran, add_pompa, add_tanah)
-                )
-                conn.commit()
-                st.success("Notifikasi berhasil ditambahkan!")
-                st.session_state.show_add_notif_modal = False
-                refresh_data()
-            except Exception as e:
-                st.error(f"Gagal menambahkan notifikasi: {e}")
-            finally:
-                cursor.close()
-                conn.close()
-
-# Modal Edit Notifikasi
-if "show_edit_notif_modal" not in st.session_state:
-    st.session_state.show_edit_notif_modal = False
-    st.session_state.edit_notif_no = 1
-
-if st.session_state.show_edit_notif_modal:
-    # Ambil data yang akan diedit
-    conn = mysql.connector.connect(**mysql_conf)
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM notif WHERE no = %s", (st.session_state.edit_notif_no,))
-    notif_to_edit = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    
-    if notif_to_edit:
-        with st.form("edit_notif_form"):
-            st.write("### Edit Notifikasi")
-            
-            # Tampilkan nomor sebagai informasi (readonly)
-            st.text_input("No", value=notif_to_edit['no'], disabled=True)
-            
-            edit_cols = st.columns([1,1,1])
-            with edit_cols[0]:
-                edit_tanggal = st.date_input("Tanggal", value=notif_to_edit['tanggal'], key="edit_notif_tanggal")
-            with edit_cols[1]:
-                jam_parts = str(notif_to_edit['jam']).split(':')
-                jam_value = int(jam_parts[0]) if len(jam_parts) > 0 else 0
-                st.markdown("<div class='time-input-container'><div>Jam:</div>", unsafe_allow_html=True)
-                edit_jam = st.selectbox("", list(range(24)), index=jam_value, key="edit_notif_jam", label_visibility="collapsed")
-            with edit_cols[2]:
-                menit_value = int(jam_parts[1]) if len(jam_parts) > 1 else 0
-                st.markdown("<div class='time-input-container'><div>Menit:</div>", unsafe_allow_html=True)
-                edit_menit = st.selectbox("", list(range(60)), index=menit_value, key="edit_notif_menit", label_visibility="collapsed")
-            
-            edit_cols2 = st.columns([1,1,1])
-            with edit_cols2[0]:
-                kebakaran_options = ["iya", "tidak", "mungkin"]
-                kebakaran_index = kebakaran_options.index(notif_to_edit['kebakaran']) if notif_to_edit['kebakaran'] in kebakaran_options else 0
-                edit_kebakaran = st.selectbox("Status Kebakaran", kebakaran_options, index=kebakaran_index, key="edit_notif_kebakaran")
-            with edit_cols2[1]:
-                edit_pompa = st.selectbox("Status Pompa", ["on", "off"], index=0 if notif_to_edit['pompa'] == "on" else 1, key="edit_notif_pompa")
-            with edit_cols2[2]:
-                tanah_options = ["kering", "basah", "normal"]
-                tanah_index = tanah_options.index(notif_to_edit['tanah']) if notif_to_edit['tanah'] in tanah_options else 0
-                edit_tanah = st.selectbox("Status Tanah", tanah_options, index=tanah_index, key="edit_notif_tanah")
-            
-            col_button = st.columns([4,1])
-            with col_button[0]:
-                submitted = st.form_submit_button("Simpan Perubahan")
-            with col_button[1]:
-                if st.form_submit_button("Batal"):
-                    st.session_state.show_edit_notif_modal = False
-                    st.experimental_rerun()
-            
-            if submitted:
+        submit_cols = st.columns([4,1])
+        with submit_cols[0]:
+            if st.form_submit_button("Simpan Notifikasi"):
                 conn = mysql.connector.connect(**mysql_conf)
                 cursor = conn.cursor()
                 try:
                     cursor.execute(
-                        "UPDATE notif SET tanggal=%s, jam=%s, kebakaran=%s, pompa=%s, tanah=%s WHERE no=%s",
-                        (edit_tanggal, f"{edit_jam:02d}:{edit_menit:02d}:00", edit_kebakaran, edit_pompa, edit_tanah, notif_to_edit['no'])
+                        "INSERT INTO notif (tanggal, jam, kebakaran, pompa, tanah) VALUES (%s, %s, %s, %s, %s)",
+                        (tanggal, f"{jam:02d}:{menit:02d}:00", kebakaran, pompa, tanah)
                     )
                     conn.commit()
-                    st.success("Notifikasi berhasil diupdate!")
-                    st.session_state.show_edit_notif_modal = False
+                    st.success("Notifikasi berhasil ditambahkan!")
+                    st.session_state.show_add_notif_modal = False
                     refresh_data()
                 except Exception as e:
-                    st.error(f"Gagal mengupdate notifikasi: {e}")
+                    st.error(f"Gagal menambahkan: {str(e)}")
                 finally:
                     cursor.close()
                     conn.close()
-    else:
-        st.warning(f"Notifikasi dengan no {st.session_state.edit_notif_no} tidak ditemukan")
-        st.session_state.show_edit_notif_modal = False
-        st.experimental_rerun()
+        with submit_cols[1]:
+            if st.form_submit_button("Batal"):
+                st.session_state.show_add_notif_modal = False
+                st.experimental_rerun()
+
+# Modal Edit Notifikasi
+if "show_edit_notif_modal" not in st.session_state:
+    st.session_state.show_edit_notif_modal = False
+    st.session_state.edit_notif_id = None
+
+if st.session_state.show_edit_notif_modal:
+    # Ambil data notifikasi untuk diedit
+    notif_df = get_notif_data()
+    notif_list = notif_df.to_dict('records')
+    
+    # Pilih notifikasi yang akan diedit
+    selected_idx = st.selectbox(
+        "Pilih Notifikasi yang akan diedit",
+        range(len(notif_list)),
+        format_func=lambda x: f"Notifikasi #{notif_list[x]['no']} - {notif_list[x]['tanggal']} {notif_list[x]['jam']}"
+    )
+    
+    if st.button("Muat Data untuk Edit"):
+        st.session_state.edit_notif_id = notif_list[selected_idx]['no']
+    
+    if st.session_state.edit_notif_id:
+        # Ambil data dari database
+        conn = mysql.connector.connect(**mysql_conf)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM notif WHERE no = %s", (st.session_state.edit_notif_id,))
+        notif_data = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if notif_data:
+            with st.form("edit_notif_form"):
+                st.write(f"### Edit Notifikasi #{notif_data['no']}")
+                
+                # Parse waktu
+                jam, menit, _ = map(int, str(notif_data['jam']).split(':'))
+                
+                cols = st.columns(3)
+                with cols[0]:
+                    edit_tanggal = st.date_input("Tanggal", value=notif_data['tanggal'], key="edit_notif_tanggal")
+                with cols[1]:
+                    edit_jam = st.number_input("Jam", min_value=0, max_value=23, value=jam, key="edit_notif_jam")
+                with cols[2]:
+                    edit_menit = st.number_input("Menit", min_value=0, max_value=59, value=menit, key="edit_notif_menit")
+                
+                cols2 = st.columns(3)
+                with cols2[0]:
+                    edit_kebakaran = st.selectbox(
+                        "Status Kebakaran", 
+                        ["tidak", "iya", "mungkin"],
+                        index=["tidak", "iya", "mungkin"].index(notif_data['kebakaran']),
+                        key="edit_notif_kebakaran"
+                    )
+                with cols2[1]:
+                    edit_pompa = st.selectbox(
+                        "Status Pompa", 
+                        ["off", "on"],
+                        index=["off", "on"].index(notif_data['pompa']),
+                        key="edit_notif_pompa"
+                    )
+                with cols2[2]:
+                    edit_tanah = st.selectbox(
+                        "Status Tanah", 
+                        ["normal", "kering", "basah"],
+                        index=["normal", "kering", "basah"].index(notif_data['tanah']),
+                        key="edit_notif_tanah"
+                    )
+                
+                submit_cols = st.columns([4,1])
+                with submit_cols[0]:
+                    if st.form_submit_button("Update Notifikasi"):
+                        conn = mysql.connector.connect(**mysql_conf)
+                        cursor = conn.cursor()
+                        try:
+                            cursor.execute(
+                                """UPDATE notif SET 
+                                    tanggal = %s, 
+                                    jam = %s, 
+                                    kebakaran = %s, 
+                                    pompa = %s, 
+                                    tanah = %s 
+                                WHERE no = %s""",
+                                (
+                                    edit_tanggal,
+                                    f"{edit_jam:02d}:{edit_menit:02d}:00",
+                                    edit_kebakaran,
+                                    edit_pompa,
+                                    edit_tanah,
+                                    st.session_state.edit_notif_id
+                                )
+                            )
+                            conn.commit()
+                            st.success("Notifikasi berhasil diupdate!")
+                            st.session_state.show_edit_notif_modal = False
+                            refresh_data()
+                        except Exception as e:
+                            st.error(f"Gagal mengupdate: {str(e)}")
+                        finally:
+                            cursor.close()
+                            conn.close()
+                with submit_cols[1]:
+                    if st.form_submit_button("Batal"):
+                        st.session_state.show_edit_notif_modal = False
+                        st.experimental_rerun()
 
 # Modal Hapus Notifikasi
 if "show_delete_notif_modal" not in st.session_state:
     st.session_state.show_delete_notif_modal = False
-    st.session_state.delete_notif_no = 1
+    st.session_state.delete_notif_id = None
 
 if st.session_state.show_delete_notif_modal:
+    # Ambil data notifikasi untuk dihapus
+    notif_df = get_notif_data()
+    notif_list = notif_df.to_dict('records')
+    
     with st.form("delete_notif_form"):
         st.write("### Hapus Notifikasi")
-        delete_no = st.number_input("No", min_value=1, max_value=len(notif_df), step=1, key="delete_notif_no_input", value=st.session_state.delete_notif_no)
         
-        col_button = st.columns([4,1])
-        with col_button[0]:
-            submitted = st.form_submit_button("Hapus")
-        with col_button[1]:
+        selected_idx = st.selectbox(
+            "Pilih Notifikasi yang akan dihapus",
+            range(len(notif_list)),
+            format_func=lambda x: f"Notifikasi #{notif_list[x]['no']} - {notif_list[x]['tanggal']} {notif_list[x]['jam']}"
+        )
+        
+        submit_cols = st.columns([4,1])
+        with submit_cols[0]:
+            if st.form_submit_button("Konfirmasi Hapus"):
+                conn = mysql.connector.connect(**mysql_conf)
+                cursor = conn.cursor()
+                try:
+                    cursor.execute(
+                        "DELETE FROM notif WHERE no = %s",
+                        (notif_list[selected_idx]['no'],)
+                    )
+                    conn.commit()
+                    st.success("Notifikasi berhasil dihapus!")
+                    st.session_state.show_delete_notif_modal = False
+                    refresh_data()
+                except Exception as e:
+                    st.error(f"Gagal menghapus: {str(e)}")
+                finally:
+                    cursor.close()
+                    conn.close()
+        with submit_cols[1]:
             if st.form_submit_button("Batal"):
                 st.session_state.show_delete_notif_modal = False
                 st.experimental_rerun()
-        
-        if submitted:
-            conn = mysql.connector.connect(**mysql_conf)
-            cursor = conn.cursor()
-            try:
-                cursor.execute("DELETE FROM notif WHERE no=%s", (delete_no,))
-                conn.commit()
-                st.success("Notifikasi berhasil dihapus!")
-                st.session_state.show_delete_notif_modal = False
-                refresh_data()
-            except Exception as e:
-                st.error(f"Gagal menghapus notifikasi: {e}")
-            finally:
-                cursor.close()
-                conn.close()
 
-# Tombol Aksi untuk Tabel Notifikasi
-notif_col_buttons = st.columns([1,1,1,1,1])
-with notif_col_buttons[0]:
-    if not notif_df.empty:
-        output2 = io.BytesIO()
-        notif_df.to_excel(output2, index=False, engine='xlsxwriter')
-        st.download_button(label="Print", data=output2.getvalue(), 
-                         file_name=f"History Notifikasi per {date.today().strftime('%Y-%m-%d')}.xlsx", 
-                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-                         on_click=lambda: st.success("Download History Notifikasi berhasil!"))
-with notif_col_buttons[1]:
-    if st.button("Tambah", key="tambah_notif"):
-        st.session_state.show_add_notif_modal = True
-with notif_col_buttons[2]:
-    if st.button("Ubah", key="ubah_notif"):
-        st.session_state.show_edit_notif_modal = True
-        st.session_state.edit_notif_no = 1
-with notif_col_buttons[3]:
-    if st.button("Hapus", key="hapus_notif"):
-        st.session_state.show_delete_notif_modal = True
-        st.session_state.delete_notif_no = 1
-
-# Tampilkan tabel notifikasi
-notif_df['No'] = notif_df.index + 1  # Tambahkan nomor urut
-notif_df['jam'] = notif_df['jam'].apply(extract_hhmm)  # Format jam
-
-# Urutan kolom untuk ditampilkan
-columns_to_show = ["No", "tanggal", "jam", "kebakaran", "pompa", "tanah"]
-
+# Tampilkan Tabel Notifikasi
+notif_df = get_notif_data()
 if not notif_df.empty:
-    st.dataframe(notif_df[columns_to_show], hide_index=True, use_container_width=True)
+    # Format kolom jam
+    notif_df['jam'] = notif_df['jam'].apply(lambda x: str(x)[:8] if x else '')
+    
+    # Tampilkan dengan kolom yang diinginkan
+    st.dataframe(
+        notif_df[['no', 'tanggal', 'jam', 'kebakaran', 'pompa', 'tanah']],
+        column_config={
+            "no": "ID",
+            "tanggal": "Tanggal",
+            "jam": "Jam",
+            "kebakaran": "Kebakaran",
+            "pompa": "Pompa",
+            "tanah": "Tanah"
+        },
+        hide_index=True,
+        use_container_width=True
+    )
 else:
     st.info("Tidak ada data notifikasi yang tersedia")

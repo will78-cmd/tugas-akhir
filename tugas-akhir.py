@@ -227,7 +227,7 @@ with col3:
 colA, colB = st.columns([3,2])
 with colA:
     st.markdown("""
-    <a href="https://github.com" target="_blank">
+    <a href="https://wildan-git78.github.io/my-repo/" target="_blank">
         <button style="background-color: #25D366; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
             Aktifkan Notifikasi WhatsApp
         </button>

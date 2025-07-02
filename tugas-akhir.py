@@ -356,7 +356,7 @@ with col3:
 colA, colB = st.columns([3,2])
 with colA:
     st.components.v1.html("""
-    <button onclick="aktifkanNotif()">Aktifkan Notifikasi Browser</button>
+    <button onclick="aktifkanNotif()">Aktifkan Notifikasi WhatsApp</button>
     <script>
     async function aktifkanNotif() {
         if (!('Notification' in window)) {
